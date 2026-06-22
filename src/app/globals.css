@@ -1,0 +1,205 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b; /* Zinc 950 */
+  --foreground: #fafafa; /* Zinc 50 */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --animate-spin-slow: spin 8s linear infinite;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Custom Scrollbar Utilities */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Extra Utility Font sizes for premium UI badges */
+.text-2xs {
+  font-size: 0.65rem;
+}
+.text-3xs {
+  font-size: 0.55rem;
+}
+.text-4xs {
+  font-size: 0.5rem;
+}
+
+/* Light mode overrides */
+.light {
+  --background: #fafafa;
+  --foreground: #09090b;
+}
+
+.light .bg-zinc-950 {
+  background-color: #fafafa;
+}
+.light .bg-zinc-950\/80 {
+  background-color: rgba(244, 244, 245, 0.85); /* zinc 100 */
+}
+.light .bg-zinc-950\/20 {
+  background-color: rgba(244, 244, 245, 0.4);
+}
+.light .bg-zinc-950\/40 {
+  background-color: rgba(244, 244, 245, 0.6);
+}
+.light .bg-zinc-900\/40 {
+  background-color: rgba(228, 228, 231, 0.4); /* zinc 200 */
+}
+.light .bg-zinc-900\/30 {
+  background-color: rgba(228, 228, 231, 0.3);
+}
+.light .bg-zinc-900\/35 {
+  background-color: rgba(228, 228, 231, 0.25);
+}
+.light .bg-zinc-900\/10 {
+  background-color: rgba(228, 228, 231, 0.1);
+}
+.light .bg-zinc-900\/20 {
+  background-color: rgba(228, 228, 231, 0.2);
+}
+.light .bg-zinc-950\/30 {
+  background-color: rgba(244, 244, 245, 0.5);
+}
+.light .bg-zinc-900\/5 {
+  background-color: rgba(228, 228, 231, 0.15);
+}
+.light .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light .border-white\/5 {
+  border-color: rgba(0, 0, 0, 0.05);
+}
+.light .text-zinc-100 {
+  color: #09090b;
+}
+.light .text-zinc-200 {
+  color: #18181b;
+}
+.light .text-zinc-300 {
+  color: #27272a;
+}
+.light .text-zinc-400 {
+  color: #52525b;
+}
+.light .text-zinc-500 {
+  color: #71717a;
+}
+.light .text-zinc-600 {
+  color: #a1a1aa;
+}
+.light .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.03);
+}
+.light .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.light .border-transparent {
+  border-color: transparent;
+}
+.light input::placeholder {
+  color: #a1a1aa;
+}
+.light .bg-purple-600\/10 {
+  background-color: rgba(147, 51, 234, 0.08);
+}
+.light .text-purple-200 {
+  color: #7e22ce; /* purple 700 */
+}
+.light .text-emerald-400 {
+  color: #059669; /* emerald 600 */
+}
+.light .text-rose-400 {
+  color: #dc2626; /* rose 600 */
+}
+.light .text-purple-400 {
+  color: #7e22ce; /* purple 700 */
+}
+.light .text-indigo-400 {
+  color: #4f46e5; /* indigo 600 */
+}
+.light .text-amber-500 {
+  color: #d97706; /* amber 600 */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.scrollbar-none {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+/* Toast & Fade Animations */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes shrinkProgress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+@keyframes shrink-progress {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+
