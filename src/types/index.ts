@@ -52,4 +52,13 @@ export interface UserStats {
   lastActiveDate?: string; // YYYY-MM-DD
   totalXP: number;
   incorrectWords: Record<string, number>; // records frequency of incorrect words
+  username?: string;
+  age?: number;
+  job?: string;
+  learningNeed?: string;
+  lastCheckinDate?: string; // YYYY-MM-DD
+  checkinStreak?: number;
+  checkinHistory?: number[]; // list of days checked in this week (1 = Mon, 7 = Sun)
+  additionalCreations?: number; // bonus custom dialogue creations
+  avatarUrl?: string; // Anime avatar image URL or code seed
 }

@@ -9,10 +9,25 @@ import DeleteConfirmModal from '../components/modals/DeleteConfirmModal';
 import MobileLayout from '../components/layout/mobile/Layout';
 import MobileDialogModal from '../components/modals/mobile/DialogModal';
 import MobileSettingsModal from '../components/modals/mobile/SettingsModal';
+import OnboardingModal from '../components/modals/OnboardingModal';
+import AttendanceModal, { AttendanceReward } from '../components/modals/AttendanceModal';
+import LeaderboardModal from '../components/modals/LeaderboardModal';
 import Toast, { ToastMessage } from '../components/ui/Toast';
 import MobileToast from '../components/ui/mobile/Toast';
 import type { Dialogue, UserStats, Settings, PracticeLevel, DialogueLine } from '../types';
-import { getDialogues, saveDialogue, getUserStats, saveUserStats, getSettings, saveSettings, softDeleteDialogue } from '../utils/supabase';
+import {
+  getDialogues,
+  saveDialogue,
+  getUserStats,
+  saveUserStats,
+  getSettings,
+  saveSettings,
+  softDeleteDialogue,
+  getDeviceUuid,
+  getLeaderboard,
+  getAttendanceConfig
+} from '../utils/supabase';
+import { checkWeeklyLimit } from '../utils/security';
 
 // Seed Dialogues
 const SEED_DIALOGUES: Dialogue[] = [
@@ -102,6 +117,17 @@ const DEFAULT_STATS: UserStats = {
   incorrectWords: {},
 };
 
+// Fallback Attendance Rewards config
+const DEFAULT_FALLBACK_REWARDS: AttendanceReward[] = [
+  { dayOfWeek: 1, rewardType: 'multiplier', rewardValue: 2, rewardLabel: 'Nhân 2 kinh nghiệm (x2 XP)' },
+  { dayOfWeek: 2, rewardType: 'creation', rewardValue: 1, rewardLabel: 'Thêm 1 lượt tạo bài học' },
+  { dayOfWeek: 3, rewardType: 'xp', rewardValue: 50, rewardLabel: '+50 XP thưởng' },
+  { dayOfWeek: 4, rewardType: 'creation', rewardValue: 2, rewardLabel: 'Thêm 2 lượt tạo bài học' },
+  { dayOfWeek: 5, rewardType: 'xp', rewardValue: 100, rewardLabel: '+100 XP thưởng' },
+  { dayOfWeek: 6, rewardType: 'multiplier', rewardValue: 3, rewardLabel: 'Nhân 3 kinh nghiệm (x3 XP)' },
+  { dayOfWeek: 7, rewardType: 'creation', rewardValue: 3, rewardLabel: 'Thêm 3 lượt tạo bài học' },
+];
+
 export default function Home() {
   const [dialogues, setDialogues] = useState<Dialogue[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -110,6 +136,13 @@ export default function Home() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [isMobile, setIsMobile] = useState(false);
 
+  // Onboarding, Attendance & Leaderboard states
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [isLeaderboardOpen, setIsLeaderboardOpen] = useState(false);
+  const [leaderboardData, setLeaderboardData] = useState<UserStats[]>([]);
+  const [attendanceRewards, setAttendanceRewards] = useState<AttendanceReward[]>([]);
+
   // Modal control states
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -117,6 +150,17 @@ export default function Home() {
 
   // Toast notifications state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  // Toggle mobile mode HTML class for typography scaling
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      if (isMobile) {
+        document.documentElement.classList.add('mobile-mode');
+      } else {
+        document.documentElement.classList.remove('mobile-mode');
+      }
+    }
+  }, [isMobile]);
 
   const showToast = (type: 'success' | 'error' | 'warning' | 'info', title: string, description: string) => {
     const id = Math.random().toString(36).substring(2, 9);
@@ -168,6 +212,11 @@ export default function Home() {
         }
         setUserStats(currentStats);
 
+        // Auto-trigger onboarding if username is empty
+        if (!currentStats.username) {
+          setIsOnboardingOpen(true);
+        }
+
         // 3. Fetch dialogues
         let currentDialogues = await getDialogues();
         if (currentDialogues.length === 0) {
@@ -180,6 +229,27 @@ export default function Home() {
         setDialogues(currentDialogues);
         if (currentDialogues.length > 0) {
           setSelectedId(currentDialogues[0].id);
+        }
+
+        // 4. Fetch attendance config
+        try {
+          const config = await getAttendanceConfig();
+          if (config && config.length === 7) {
+            setAttendanceRewards(config);
+          } else {
+            setAttendanceRewards(DEFAULT_FALLBACK_REWARDS);
+          }
+        } catch (e) {
+          console.error('Failed to load attendance config:', e);
+          setAttendanceRewards(DEFAULT_FALLBACK_REWARDS);
+        }
+
+        // 5. Fetch leaderboard data
+        try {
+          const lb = await getLeaderboard();
+          setLeaderboardData(lb);
+        } catch (e) {
+          console.error('Failed to load leaderboard data:', e);
         }
       } catch (err) {
         console.error('Không kết nối được Supabase, chuyển sang chế độ dự phòng.', err);
@@ -218,9 +288,21 @@ export default function Home() {
 
   // Add dialogue handler
   const handleAddDialogue = async (newDialogue: Omit<Dialogue, 'id' | 'createdAt' | 'practiceCount'>) => {
+    const additionalLimit = userStats.additionalCreations || 0;
+    // Enforce limit of 50 + additionalCreations custom dialogues per week
+    if (!checkWeeklyLimit(dialogues, additionalLimit)) {
+      showToast(
+        'error',
+        'Giới hạn tạo bài học',
+        `Bạn đã đạt giới hạn tự tạo tối đa ${50 + additionalLimit} bài học trong tuần này (bao gồm lượt thưởng). Hãy điểm danh để tích thêm lượt tạo nhé!`
+      );
+      return;
+    }
+
+    const deviceUuid = getDeviceUuid();
     const fullDialogue: Dialogue = {
       ...newDialogue,
-      id: `dialogue-${Date.now()}`,
+      id: `dialogue-${deviceUuid}-${Date.now()}`,
       createdAt: new Date().toISOString(),
       practiceCount: 0,
     };
@@ -281,6 +363,130 @@ export default function Home() {
       await saveSettings(newSettings);
     } catch (err) {
       console.error('Không thể lưu cấu hình lên Supabase:', err);
+    }
+  };
+
+  const handleOpenLeaderboard = async () => {
+    setIsLeaderboardOpen(true);
+    try {
+      const data = await getLeaderboard();
+      setLeaderboardData(data);
+    } catch (e) {
+      console.error('Failed to refresh leaderboard:', e);
+    }
+  };
+
+  const handleOnboardingSave = async (profileData: {
+    username: string;
+    age: number;
+    job: string;
+    learningNeed: string;
+    avatarUrl: string;
+  }) => {
+    const updatedStats: UserStats = {
+      ...userStats,
+      username: profileData.username,
+      age: profileData.age,
+      job: profileData.job,
+      learningNeed: profileData.learningNeed,
+      avatarUrl: profileData.avatarUrl,
+    };
+    
+    setUserStats(updatedStats);
+    setIsOnboardingOpen(false);
+    
+    try {
+      await saveUserStats(updatedStats);
+      showToast('success', 'Hồ sơ cá nhân đã lưu!', 'Chào mừng bạn đến với ShadowDictate.');
+      // Refresh leaderboard to include new user
+      const data = await getLeaderboard();
+      setLeaderboardData(data);
+    } catch (err) {
+      console.error('Lỗi khi lưu hồ sơ onboarding:', err);
+      showToast('error', 'Lỗi kết nối', 'Không thể lưu hồ sơ lên Supabase.');
+    }
+  };
+
+  const handleCheckin = async (reward: AttendanceReward, randomXpBonus: number) => {
+    const today = new Date();
+    const todayStr = today.toLocaleDateString('sv');
+    
+    // 1. Calculate checkin streak
+    let newCheckinStreak = userStats.checkinStreak || 0;
+    const lastCheckin = userStats.lastCheckinDate ? new Date(userStats.lastCheckinDate) : null;
+    
+    if (!lastCheckin) {
+      newCheckinStreak = 1;
+    } else {
+      const todayDateObj = new Date(todayStr);
+      lastCheckin.setHours(0, 0, 0, 0);
+      todayDateObj.setHours(0, 0, 0, 0);
+      const diffTime = todayDateObj.getTime() - lastCheckin.getTime();
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays === 1) {
+        newCheckinStreak += 1;
+      } else if (diffDays > 1) {
+        newCheckinStreak = 1;
+      }
+    }
+    
+    // 2. Calculate checkin history (Mon-Sun of current week)
+    const getMonday = (d: Date) => {
+      const date = new Date(d);
+      const day = date.getDay();
+      const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(date.setDate(diff));
+      mon.setHours(0, 0, 0, 0);
+      return mon;
+    };
+    
+    const currentMonday = getMonday(new Date());
+    let newCheckinHistory = userStats.checkinHistory || [];
+    if (lastCheckin && new Date(userStats.lastCheckinDate!) < currentMonday) {
+      newCheckinHistory = [];
+    }
+    
+    let dayOfWeek = today.getDay();
+    if (dayOfWeek === 0) dayOfWeek = 7;
+    if (!newCheckinHistory.includes(dayOfWeek)) {
+      newCheckinHistory = [...newCheckinHistory, dayOfWeek];
+    }
+    
+    // 3. Process rewards
+    let xpGift = randomXpBonus;
+    let creationGift = 0;
+    
+    if (reward.rewardType === 'xp') {
+      xpGift += reward.rewardValue;
+    } else if (reward.rewardType === 'creation') {
+      creationGift = reward.rewardValue;
+    } else if (reward.rewardType === 'multiplier') {
+      // Award extra fixed XP for multiplier check-in day, plus multiplier is applied to practice XP
+      xpGift += reward.rewardValue * 25;
+    }
+    
+    const updatedStats: UserStats = {
+      ...userStats,
+      lastCheckinDate: todayStr,
+      checkinStreak: newCheckinStreak,
+      checkinHistory: newCheckinHistory,
+      totalXP: userStats.totalXP + xpGift,
+      additionalCreations: (userStats.additionalCreations || 0) + creationGift,
+    };
+    
+    setUserStats(updatedStats);
+    
+    try {
+      await saveUserStats(updatedStats);
+      showToast('success', 'Điểm danh thành công!', `Bạn nhận được ${xpGift} XP ${creationGift > 0 ? `và +${creationGift} lượt tạo` : ''}.`);
+      
+      // Refresh leaderboard
+      const data = await getLeaderboard();
+      setLeaderboardData(data);
+    } catch (err) {
+      console.error('Lỗi khi lưu điểm danh:', err);
+      showToast('error', 'Lỗi hệ thống', 'Không thể cập nhật thông tin điểm danh.');
     }
   };
 
@@ -347,7 +553,7 @@ export default function Home() {
       }
     }
 
-    // 3. Update Streak & XP
+    // 3. Update Streak & XP with Multiplier support
     const todayStr = new Date().toLocaleDateString('sv'); // YYYY-MM-DD format
     let newStreak = userStats.streak;
 
@@ -355,8 +561,8 @@ export default function Home() {
       newStreak = 1;
     } else {
       const lastActive = new Date(userStats.lastActiveDate);
-      const today = new Date(todayStr);
-      const diffTime = today.getTime() - lastActive.getTime();
+      const todayObj = new Date(todayStr);
+      const diffTime = todayObj.getTime() - lastActive.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
       if (diffDays === 1) {
@@ -366,7 +572,22 @@ export default function Home() {
       }
     }
 
-    const xpEarned = Math.round(score * 1.5);
+    // Check check-in multiplier for today
+    const today = new Date();
+    let dayOfWeek = today.getDay();
+    if (dayOfWeek === 0) dayOfWeek = 7;
+    const todayReward = attendanceRewards.find(r => r.dayOfWeek === dayOfWeek);
+    let activeMultiplier = 1;
+    if (
+      todayReward &&
+      todayReward.rewardType === 'multiplier' &&
+      userStats.lastCheckinDate === todayStr
+    ) {
+      activeMultiplier = todayReward.rewardValue;
+    }
+
+    const baseXp = Math.round(score * 1.5);
+    const xpEarned = baseXp * activeMultiplier;
     const updatedStats: UserStats = {
       ...userStats,
       streak: newStreak,
@@ -377,6 +598,9 @@ export default function Home() {
     setUserStats(updatedStats);
     try {
       await saveUserStats(updatedStats);
+      // Refresh leaderboard after earning XP
+      const lb = await getLeaderboard();
+      setLeaderboardData(lb);
     } catch (err) {
       console.error('Không thể cập nhật chỉ số lên Supabase:', err);
     }
@@ -412,6 +636,11 @@ export default function Home() {
         toastDesc += ` (${skippedCount} câu chưa luyện).`;
       }
       toastDesc += ` Độ thành thạo hội thoại: ${newOverall}%${diff > 0 ? ` (+${diff}%)` : ''}.`;
+      if (activeMultiplier > 1) {
+        toastDesc += ` Nhận x${activeMultiplier} XP (${xpEarned} XP!).`;
+      } else {
+        toastDesc += ` Nhận ${xpEarned} XP.`;
+      }
 
       showToast(toastType, toastTitle, toastDesc);
     }
@@ -435,6 +664,8 @@ export default function Home() {
           settings={settings}
           onPracticeComplete={handlePracticeComplete}
           showToast={showToast}
+          onAttendanceClick={() => setIsAttendanceOpen(true)}
+          onLeaderboardClick={handleOpenLeaderboard}
         />
 
         {/* Add Dialogue Modal */}
@@ -470,6 +701,33 @@ export default function Home() {
             <MobileToast key={toast.id} toast={toast} onClose={removeToast} theme={theme} />
           ))}
         </div>
+
+        {/* Onboarding Modal */}
+        <OnboardingModal
+          isOpen={isOnboardingOpen}
+          onSave={handleOnboardingSave}
+          theme={theme}
+        />
+
+        {/* Attendance Modal */}
+        <AttendanceModal
+          isOpen={isAttendanceOpen}
+          onClose={() => setIsAttendanceOpen(false)}
+          userStats={userStats}
+          rewardsConfig={attendanceRewards}
+          onCheckin={handleCheckin}
+          theme={theme}
+        />
+
+        {/* Leaderboard Modal */}
+        <LeaderboardModal
+          isOpen={isLeaderboardOpen}
+          onClose={() => setIsLeaderboardOpen(false)}
+          leaderboardData={leaderboardData}
+          currentUserStats={userStats}
+          currentUserStatsId={`stats_${getDeviceUuid()}`}
+          theme={theme}
+        />
       </div>
     );
   }
@@ -489,6 +747,8 @@ export default function Home() {
         theme={theme}
         onThemeToggle={handleThemeToggle}
         onDeleteClick={setDialogueToDelete}
+        onAttendanceClick={() => setIsAttendanceOpen(true)}
+        onLeaderboardClick={handleOpenLeaderboard}
       />
 
       <PracticeArea
@@ -532,6 +792,33 @@ export default function Home() {
           <Toast key={toast.id} toast={toast} onClose={removeToast} theme={theme} />
         ))}
       </div>
+
+      {/* Onboarding Modal */}
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onSave={handleOnboardingSave}
+        theme={theme}
+      />
+
+      {/* Attendance Modal */}
+      <AttendanceModal
+        isOpen={isAttendanceOpen}
+        onClose={() => setIsAttendanceOpen(false)}
+        userStats={userStats}
+        rewardsConfig={attendanceRewards}
+        onCheckin={handleCheckin}
+        theme={theme}
+      />
+
+      {/* Leaderboard Modal */}
+      <LeaderboardModal
+        isOpen={isLeaderboardOpen}
+        onClose={() => setIsLeaderboardOpen(false)}
+        leaderboardData={leaderboardData}
+        currentUserStats={userStats}
+        currentUserStatsId={`stats_${getDeviceUuid()}`}
+        theme={theme}
+      />
     </div>
   );
 }

@@ -82,6 +82,15 @@ function toUserStats(row: any): UserStats {
     lastActiveDate: row.last_active_date || undefined,
     totalXP: row.total_xp ?? 0,
     incorrectWords: typeof row.incorrect_words === 'object' && row.incorrect_words ? row.incorrect_words : {},
+    username: row.username || undefined,
+    age: row.age || undefined,
+    job: row.job || undefined,
+    learningNeed: row.learning_need || undefined,
+    lastCheckinDate: row.last_checkin_date || undefined,
+    checkinStreak: row.checkin_streak ?? 0,
+    checkinHistory: Array.isArray(row.checkin_history) ? row.checkin_history : [],
+    additionalCreations: row.additional_creations ?? 0,
+    avatarUrl: row.avatar_url || undefined,
   };
 }
 
@@ -95,15 +104,32 @@ function toSettings(row: any): Settings {
   };
 }
 
+// --- DEVICE UUID HELPER ---
+
+/**
+ * Returns a unique browser Device UUID stored in localStorage to separate accounts/data.
+ */
+export function getDeviceUuid(): string {
+  if (typeof window === 'undefined') return 'server-side';
+  let uuid = localStorage.getItem('shadowdictate_device_uuid');
+  if (!uuid) {
+    uuid = 'dev-' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 9);
+    localStorage.setItem('shadowdictate_device_uuid', uuid);
+  }
+  return uuid;
+}
+
 // --- DATABASE FUNCTIONS ---
 
 /**
- * Fetch all dialogues from Supabase ordered by created_at desc
+ * Fetch all dialogues from Supabase ordered by created_at desc, filtered by seed or current device UUID
  */
 export async function getDialogues(): Promise<Dialogue[]> {
+  const uuid = getDeviceUuid();
   const { data, error } = await supabase
     .from('dialogues')
     .select('*')
+    .or(`id.like.seed-%,id.like.dialogue-${uuid}-%`)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -130,13 +156,14 @@ export async function saveDialogue(dialogue: Dialogue): Promise<void> {
 }
 
 /**
- * Fetch user stats from Supabase (using id: 'default_stats')
+ * Fetch user stats from Supabase (using device-specific stats ID)
  */
 export async function getUserStats(): Promise<UserStats | null> {
+  const uuid = getDeviceUuid();
   const { data, error } = await supabase
     .from('user_stats')
     .select('*')
-    .eq('id', 'default_stats')
+    .eq('id', `stats_${uuid}`)
     .single();
 
   if (error) {
@@ -152,15 +179,25 @@ export async function getUserStats(): Promise<UserStats | null> {
 }
 
 /**
- * Update user stats in Supabase
+ * Update user stats in Supabase (using device-specific stats ID)
  */
 export async function saveUserStats(stats: UserStats): Promise<void> {
+  const uuid = getDeviceUuid();
   const row = {
-    id: 'default_stats',
+    id: `stats_${uuid}`,
     streak: stats.streak,
     last_active_date: stats.lastActiveDate || null,
     total_xp: stats.totalXP,
     incorrect_words: stats.incorrectWords || {},
+    username: stats.username || null,
+    age: stats.age || null,
+    job: stats.job || null,
+    learning_need: stats.learningNeed || null,
+    last_checkin_date: stats.lastCheckinDate || null,
+    checkin_streak: stats.checkinStreak ?? 0,
+    checkin_history: stats.checkinHistory || [],
+    additional_creations: stats.additionalCreations ?? 0,
+    avatar_url: stats.avatarUrl || null,
   };
 
   const { error } = await supabase
@@ -174,13 +211,14 @@ export async function saveUserStats(stats: UserStats): Promise<void> {
 }
 
 /**
- * Fetch settings from Supabase (using id: 'default_settings')
+ * Fetch settings from Supabase (using device-specific settings ID)
  */
 export async function getSettings(): Promise<Settings | null> {
+  const uuid = getDeviceUuid();
   const { data, error } = await supabase
     .from('settings')
     .select('*')
-    .eq('id', 'default_settings')
+    .eq('id', `settings_${uuid}`)
     .single();
 
   if (error) {
@@ -195,11 +233,12 @@ export async function getSettings(): Promise<Settings | null> {
 }
 
 /**
- * Update settings in Supabase
+ * Update settings in Supabase (using device-specific settings ID)
  */
 export async function saveSettings(settings: Settings): Promise<void> {
+  const uuid = getDeviceUuid();
   const row = {
-    id: 'default_settings',
+    id: `settings_${uuid}`,
     gemini_api_key: settings.geminiApiKey,
     voice_name: settings.voiceName,
     speech_rate: settings.speechRate,
@@ -230,3 +269,58 @@ export async function softDeleteDialogue(id: string): Promise<void> {
     throw error;
   }
 }
+
+/**
+ * Fetch top 10 users ordered by total_xp desc
+ */
+export async function getLeaderboard(): Promise<UserStats[]> {
+  const { data, error } = await supabase
+    .from('user_stats')
+    .select('*')
+    .order('total_xp', { ascending: false })
+    .limit(10);
+
+  if (error) {
+    console.error('Lỗi khi lấy danh sách bảng xếp hạng:', error);
+    return [];
+  }
+
+  return (data || []).map(toUserStats);
+}
+
+/**
+ * Fetch weekly attendance config
+ */
+export async function getAttendanceConfig(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('attendance_config')
+    .select('rewards')
+    .eq('id', 'weekly_rewards')
+    .single();
+
+  if (error) {
+    // If not found in DB, return empty array so that the caller can use local fallback configuration
+    if (error.code === 'PGRST116') {
+      return [];
+    }
+    console.error('Lỗi khi lấy cấu hình điểm danh:', error);
+    return [];
+  }
+
+  return data?.rewards || [];
+}
+
+/**
+ * Save weekly attendance config
+ */
+export async function saveAttendanceConfig(rewards: any[]): Promise<void> {
+  const { error } = await supabase
+    .from('attendance_config')
+    .upsert({ id: 'weekly_rewards', rewards });
+
+  if (error) {
+    console.error('Lỗi khi lưu cấu hình điểm danh lên Supabase:', error);
+    throw error;
+  }
+}
+

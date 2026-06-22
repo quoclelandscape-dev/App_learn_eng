@@ -12,7 +12,8 @@ import {
   FileText,
   Sun,
   Moon,
-  Trash2
+  Trash2,
+  Shield
 } from 'lucide-react';
 import type { Dialogue, UserStats } from '../../types';
 
@@ -26,6 +27,8 @@ interface SidebarProps {
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
   onDeleteClick: (dialogue: Dialogue) => void;
+  onAttendanceClick?: () => void;
+  onLeaderboardClick?: () => void;
 }
 
 export default function Sidebar({
@@ -38,6 +41,8 @@ export default function Sidebar({
   theme,
   onThemeToggle,
   onDeleteClick,
+  onAttendanceClick,
+  onLeaderboardClick,
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
@@ -151,6 +156,45 @@ export default function Sidebar({
               <span className="text-sm font-bold">{userStats.totalXP}</span>
             </div>
           </div>
+        </div>
+
+        {/* Quick Action Navigation */}
+        <div className="flex gap-2 mt-3 pt-2 border-t border-dashed border-zinc-700/20">
+          <button
+            onClick={onAttendanceClick}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl border text-[10px] font-bold transition-all active:scale-95 ${
+              theme === 'dark'
+                ? 'bg-purple-650/10 border-purple-500/20 text-purple-450 hover:bg-purple-650/20'
+                : 'bg-purple-50 border-purple-200 text-purple-700 hover:bg-purple-100 shadow-sm'
+            }`}
+            title="Điểm danh tuần"
+          >
+            <Calendar size={13} className="text-purple-400" />
+            Điểm Danh
+          </button>
+          <button
+            onClick={onLeaderboardClick}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2 rounded-xl border text-[10px] font-bold transition-all active:scale-95 ${
+              theme === 'dark'
+                ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500 hover:bg-yellow-500/20'
+                : 'bg-yellow-50 border-yellow-250 text-yellow-750 hover:bg-yellow-100 shadow-sm'
+            }`}
+            title="Bảng xếp hạng"
+          >
+            <Award size={13} className="text-yellow-500" />
+            Đua Top
+          </button>
+          <a
+            href="/admin/setup-app-operations"
+            className={`flex-shrink-0 flex items-center justify-center p-1.5 rounded-xl border transition-all active:scale-95 ${
+              theme === 'dark'
+                ? 'bg-white/5 border-white/10 text-zinc-400 hover:bg-white/10 hover:text-zinc-200'
+                : 'bg-zinc-100 border-zinc-250 text-zinc-600 hover:bg-zinc-200 hover:text-zinc-900 shadow-sm'
+            }`}
+            title="Cấu hình quản trị"
+          >
+            <Shield size={13} />
+          </a>
         </div>
       </div>
 

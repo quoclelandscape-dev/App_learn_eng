@@ -35,6 +35,7 @@ interface PracticeLineProps {
   lineRate: number;
   showResults: boolean;
   isRecognizerSupported: boolean;
+  interimTranscript?: string;
   onPlayTTS: () => void;
   onPauseTTS: () => void;
   onResumeTTS: () => void;
@@ -62,6 +63,7 @@ export default function PracticeLine({
   lineRate,
   showResults,
   isRecognizerSupported,
+  interimTranscript,
   onPlayTTS,
   onPauseTTS,
   onResumeTTS,
@@ -351,8 +353,12 @@ export default function PracticeLine({
                     )}
                   </button>
                   
-                  {/* Transcript helper */}
-                  {userState.transcript && (
+                  {isLineRecording && interimTranscript && (
+                    <span className="text-xs text-purple-400 font-semibold italic animate-pulse truncate max-w-[240px]">
+                      Đang nghe: &quot;{interimTranscript}&quot;
+                    </span>
+                  )}
+                  {!isLineRecording && userState.transcript && (
                     <span className="text-xs text-zinc-550 italic truncate max-w-[240px]">
                       Bạn nói: &quot;{userState.transcript}&quot;
                     </span>

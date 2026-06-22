@@ -26,6 +26,7 @@ interface PracticeLineProps {
   lineRate: number;
   showResults: boolean;
   isRecognizerSupported: boolean;
+  interimTranscript?: string;
   onPlayTTS: () => void;
   onPauseTTS: () => void;
   onResumeTTS: () => void;
@@ -53,6 +54,7 @@ export default function PracticeLine({
   lineRate,
   showResults,
   isRecognizerSupported,
+  interimTranscript,
   onPlayTTS,
   onPauseTTS,
   onResumeTTS,
@@ -238,14 +240,19 @@ export default function PracticeLine({
                   onClick={onToggleRecord}
                   className={`flex items-center gap-1.5 py-1.5 px-3 rounded-lg border text-3xs font-bold uppercase tracking-wider transition-all active:scale-95 ${
                     isLineRecording
-                      ? 'bg-red-600 border-red-500 text-white shadow-md'
+                      ? 'bg-red-650 border-red-500 text-white shadow-md'
                       : theme === 'dark' ? 'bg-white/5 border-white/10 text-zinc-400' : 'bg-zinc-100 border-zinc-200 text-zinc-650'
                   }`}
                 >
                   {isLineRecording ? <MicOff size={11} /> : <Mic size={11} className="text-red-405" />}
                   <span>{isLineRecording ? 'Đang nghe' : 'Bấm nói'}</span>
                 </button>
-                {userState.transcript && (
+                {isLineRecording && interimTranscript && (
+                  <span className="text-[10px] text-purple-400 font-semibold italic animate-pulse truncate max-w-[150px]">
+                    &quot;{interimTranscript}&quot;
+                  </span>
+                )}
+                {!isLineRecording && userState.transcript && (
                   <span className="text-[10px] text-zinc-550 italic truncate max-w-[150px]">
                     &quot;{userState.transcript}&quot;
                   </span>

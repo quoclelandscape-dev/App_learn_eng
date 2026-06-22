@@ -20,6 +20,8 @@ interface MobileLayoutProps {
   settings: Settings;
   onPracticeComplete: (score: number, level: PracticeLevel, updatedLines: DialogueLine[]) => void;
   showToast: (type: 'success' | 'error' | 'warning' | 'info', title: string, description: string) => void;
+  onAttendanceClick: () => void;
+  onLeaderboardClick: () => void;
 }
 
 export default function Layout({
@@ -35,6 +37,8 @@ export default function Layout({
   settings,
   onPracticeComplete,
   showToast,
+  onAttendanceClick,
+  onLeaderboardClick,
 }: MobileLayoutProps) {
   const [activeView, setActiveView] = useState<'list' | 'practice'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -88,58 +92,63 @@ export default function Layout({
             onThemeToggle={onThemeToggle}
             onSettingsClick={onSettingsClick}
             onAddClick={onAddClick}
+            onAttendanceClick={onAttendanceClick}
+            onLeaderboardClick={onLeaderboardClick}
           />
 
           {/* Search & Filters */}
-          <div className={`p-4 space-y-3 border-b ${theme === 'dark' ? 'border-white/5 bg-zinc-900/10' : 'bg-white border-zinc-200'}`}>
-            <div className="relative">
-              <Search size={14} className={`absolute left-3.5 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`} />
-              <input
-                type="text"
-                placeholder="Tìm chủ đề hoặc từ khóa..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full rounded-xl border pl-10 pr-4 py-2.5 text-base outline-none transition-all ${
-                  theme === 'dark'
-                    ? 'border-white/10 bg-white/5 text-zinc-100 placeholder-zinc-500 focus:border-purple-500/50'
-                    : 'border-zinc-300 bg-zinc-100 text-zinc-900 placeholder-zinc-450 focus:border-purple-500 focus:bg-white'
-                }`}
-              />
-            </div>
+          <div className={`px-4 py-2.5 space-y-2 border-b ${theme === 'dark' ? 'border-white/5 bg-zinc-900/10' : 'bg-white border-zinc-200'}`}>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <Search size={13} className={`absolute left-3 top-1/2 -translate-y-1/2 ${theme === 'dark' ? 'text-zinc-500' : 'text-zinc-400'}`} />
+                <input
+                  type="text"
+                  placeholder="Tìm bài học..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`w-full rounded-xl border pl-9 pr-3 py-1.5 text-xs outline-none transition-all ${
+                    theme === 'dark'
+                      ? 'border-white/10 bg-white/5 text-zinc-150 placeholder-zinc-500 focus:border-purple-500/50'
+                      : 'border-zinc-200 bg-zinc-100 text-zinc-900 placeholder-zinc-405 focus:border-purple-500 focus:bg-white'
+                  }`}
+                />
+              </div>
 
-            <div className="flex gap-2">
               <button
                 onClick={() => setShowSpacedRepetitionOnly(!showSpacedRepetitionOnly)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg border text-2xs font-semibold transition-all ${
+                className={`flex-shrink-0 flex items-center justify-center gap-1 py-1.5 px-3 rounded-xl border text-[11px] font-bold transition-all ${
                   showSpacedRepetitionOnly
-                    ? 'bg-amber-500/20 border-amber-500/30 text-amber-400'
+                    ? 'bg-amber-500/20 border-amber-500/30 text-amber-500'
                     : theme === 'dark'
                     ? 'bg-white/5 border-white/10 text-zinc-400 hover:text-zinc-200'
-                    : 'bg-zinc-100 border-zinc-250 text-zinc-650 hover:text-zinc-900'
+                    : 'bg-zinc-100 border-zinc-250 text-zinc-650 hover:text-zinc-900 shadow-xs'
                 }`}
               >
                 <Calendar size={12} />
-                Cần Ôn Tập
+                <span>Ôn tập</span>
               </button>
-              {selectedTag && (
+            </div>
+
+            {selectedTag && (
+              <div className="flex gap-2">
                 <button
                   onClick={() => setSelectedTag(null)}
-                  className="px-2.5 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-2xs font-semibold"
+                  className="px-2.5 py-1 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-[10px] font-bold"
                 >
                   Bỏ lọc: {selectedTag}
                 </button>
-              )}
-            </div>
+              </div>
+            )}
 
             {allTags.length > 0 && !selectedTag && (
-              <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+              <div className="flex gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
                 {allTags.map(tag => (
                   <button
                     key={tag}
                     onClick={() => setSelectedTag(tag)}
-                    className={`whitespace-nowrap rounded-lg border px-2.5 py-1 text-3xs transition-all ${
+                    className={`whitespace-nowrap rounded-lg border px-2 py-0.5 text-[9px] font-bold transition-all ${
                       theme === 'dark'
-                        ? 'bg-white/5 border-white/5 text-zinc-400 hover:text-zinc-200'
+                        ? 'bg-white/5 border-white/5 text-zinc-450 hover:text-zinc-200'
                         : 'bg-zinc-100 border-zinc-200 text-zinc-600 hover:text-zinc-900'
                     }`}
                   >

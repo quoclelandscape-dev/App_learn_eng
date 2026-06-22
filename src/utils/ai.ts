@@ -1,5 +1,20 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Promise<T> {
+  try {
+    return await fn();
+  } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('API_KEY') || errorMsg.includes('INVALID_ARGUMENT');
+    if (retries > 0 && !isApiKeyError) {
+      console.warn(`Gemini API call failed with error: ${errorMsg}. Retrying in ${delay}ms... (${retries} retries left)`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      return callWithRetry(fn, retries - 1, delay * 2);
+    }
+    throw error;
+  }
+}
+
 /**
  * Generates an English dialogue with Vietnamese translations on a given topic
  * using the Google Gemini API (gemini-2.5-flash).
@@ -57,9 +72,9 @@ Trả về dữ liệu dưới dạng JSON thuần túy theo đúng cấu trúc 
   ]
 }`;
 
-    const result = await model.generateContent({
+    const result = await callWithRetry(() => model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    });
+    }));
 
     const responseText = result.response.text();
     if (!responseText) {
@@ -216,9 +231,9 @@ Trả về dữ liệu dưới dạng JSON thuần túy theo đúng cấu trúc 
   ]
 }`;
 
-    const result = await model.generateContent({
+    const result = await callWithRetry(() => model.generateContent({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
-    });
+    }));
 
     const responseText = result.response.text();
     if (!responseText) {

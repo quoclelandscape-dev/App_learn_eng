@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { X, Sparkles, Plus, Trash2, Send, Save, Loader2, Info } from 'lucide-react';
 import type { Dialogue, DialogueLine } from '../../../types';
 import { generateDialogueFromAI } from '../../../utils/ai';
+import { sanitizeText } from '../../../utils/security';
 
 interface DialogModalProps {
   isOpen: boolean;
@@ -62,7 +63,8 @@ export default function DialogModal({
   };
 
   const handleGenerateAI = async () => {
-    if (!topic.trim()) {
+    const sanitizedTopic = sanitizeText(topic);
+    if (!sanitizedTopic) {
       setError(lessonType === 'paragraph' ? 'Vui lòng nhập chủ đề bạn muốn viết đoạn văn.' : 'Vui lòng nhập chủ đề bạn muốn hội thoại.');
       return;
     }
@@ -71,19 +73,19 @@ export default function DialogModal({
     setError(null);
 
     try {
-      const result = await generateDialogueFromAI(topic, geminiApiKey, lessonType, sentenceLength);
+      const result = await generateDialogueFromAI(sanitizedTopic, geminiApiKey, lessonType, sentenceLength);
       
       onSave({
-        title: result.title,
-        description: result.description,
-        tags: result.tags,
+        title: sanitizeText(result.title),
+        description: sanitizeText(result.description),
+        tags: result.tags.map(t => sanitizeText(t)).filter(Boolean),
         type: lessonType,
         sentenceLength: sentenceLength,
         lines: result.lines.map((l, index) => ({
           id: `line-${Date.now()}-${index}`,
-          speaker: lessonType === 'paragraph' ? 'Paragraph' : (l.speaker || 'A'),
-          en: l.en,
-          vi: l.vi
+          speaker: lessonType === 'paragraph' ? 'Paragraph' : sanitizeText(l.speaker || 'A'),
+          en: sanitizeText(l.en),
+          vi: sanitizeText(l.vi)
         }))
       });
 
@@ -101,7 +103,8 @@ export default function DialogModal({
     e.preventDefault();
     setError(null);
 
-    if (!title.trim()) {
+    const sanitizedTitle = sanitizeText(title);
+    if (!sanitizedTitle) {
       setError(lessonType === 'paragraph' ? 'Vui lòng nhập tên chủ đề đoạn văn.' : 'Vui lòng nhập tên hội thoại.');
       return;
     }
@@ -117,19 +120,19 @@ export default function DialogModal({
 
     const tags = tagsInput
       .split(',')
-      .map(t => t.trim().toLowerCase())
+      .map(t => sanitizeText(t).toLowerCase())
       .filter(t => t.length > 0);
 
     onSave({
-      title,
-      description,
+      title: sanitizedTitle,
+      description: sanitizeText(description),
       tags: tags.length > 0 ? tags : (lessonType === 'paragraph' ? ['doan-van'] : ['giao-tiep']),
       type: lessonType,
       lines: filteredLines.map((l, index) => ({
         id: `line-${Date.now()}-${index}`,
-        speaker: lessonType === 'paragraph' ? 'Paragraph' : (l.speaker || 'A'),
-        en: l.en.trim(),
-        vi: l.vi.trim()
+        speaker: lessonType === 'paragraph' ? 'Paragraph' : sanitizeText(l.speaker || 'A'),
+        en: sanitizeText(l.en),
+        vi: sanitizeText(l.vi)
       }))
     });
 

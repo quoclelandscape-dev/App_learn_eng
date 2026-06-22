@@ -27,6 +27,7 @@ import type { Dialogue, DialogueLine, PracticeLevel, Settings } from '../../type
 import { speak, stopSpeaking, pauseSpeaking, resumeSpeaking, SpeechRecognizer } from '../../utils/speech';
 import { diffWords, WordDiff, calculateAccuracy } from '../../utils/diff';
 import { generateAIChatFeedback, AIChatFeedback } from '../../utils/ai';
+import { sanitizeText } from '../../utils/security';
 import PracticeLine from './PracticeLine';
 import AIChatView from './AIChatView';
 
@@ -56,6 +57,22 @@ export default function PracticeArea({
   const [activeSpeechLineId, setActiveSpeechLineId] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState<string | null>(null); // contains lineId
   const [recordingError, setRecordingError] = useState<string | null>(null);
+  const [interimTranscripts, setInterimTranscripts] = useState<Record<string, string>>({});
+  const micSessionStartRef = useRef<number | null>(null);
+
+  const checkMicTimeout = (): boolean => {
+    const now = Date.now();
+    if (!micSessionStartRef.current) {
+      micSessionStartRef.current = now;
+    } else if (now - micSessionStartRef.current > 30 * 60 * 1000) {
+      recognizer.stop();
+      setIsRecording(null);
+      showToast('warning', 'Hết hạn sử dụng Mic', 'Thời gian sử dụng micro đã đạt giới hạn 30 phút để tiết kiệm năng lượng. Vui lòng bấm nói lại để xác nhận tiếp tục.');
+      micSessionStartRef.current = null;
+      return true;
+    }
+    return false;
+  };
 
   // Dictation/Listening Mode State
   const [userInputs, setUserInputs] = useState<Record<string, string>>({});
@@ -461,7 +478,7 @@ export default function PracticeArea({
     const line = dialogue.lines.find(l => l.id === lineId);
     if (!line) return;
 
-    const userInput = userInputs[`${level}_${lineId}`] || '';
+    const userInput = sanitizeText(userInputs[`${level}_${lineId}`] || '');
     const diff = diffWords(line.en, userInput);
     const score = userInput.trim() !== '' ? calculateAccuracy(line.en, userInput) : 0;
 
@@ -486,13 +503,19 @@ export default function PracticeArea({
   // Recording handler
   const handleToggleRecord = (line: DialogueLine) => {
     if (isRecording) {
-      // If listening on another line, stop first
       recognizer.stop();
+      setInterimTranscripts(prev => {
+        const next = { ...prev };
+        delete next[isRecording];
+        return next;
+      });
       if (isRecording === line.id) {
         setIsRecording(null);
         return;
       }
     }
+
+    if (checkMicTimeout()) return;
 
     setRecordingError(null);
     setIsRecording(line.id);
@@ -520,6 +543,17 @@ export default function PracticeArea({
       },
       () => {
         setIsRecording(null);
+        setInterimTranscripts(prev => {
+          const next = { ...prev };
+          delete next[line.id];
+          return next;
+        });
+      },
+      (interimText) => {
+        setInterimTranscripts(prev => ({
+          ...prev,
+          [line.id]: interimText
+        }));
       }
     );
   };
@@ -530,7 +564,7 @@ export default function PracticeArea({
     const computedResults = { ...results };
 
     dialogue.lines.forEach(line => {
-      const userInput = userInputs[`${level}_${line.id}`] || '';
+      const userInput = sanitizeText(userInputs[`${level}_${line.id}`] || '');
       const diff = diffWords(line.en, userInput);
       const score = userInput.trim() !== '' ? calculateAccuracy(line.en, userInput) : 0;
       computedResults[`${level}_${line.id}`] = { score, diff };
@@ -543,7 +577,7 @@ export default function PracticeArea({
 
     // Construct updatedLines to pass line-specific scores to parent component
     const updatedLines = dialogue.lines.map(line => {
-      const userInput = userInputs[`${level}_${line.id}`] || '';
+      const userInput = sanitizeText(userInputs[`${level}_${line.id}`] || '');
       // A line is considered completed if user typed something in it
       const lineScore = userInput.trim() !== '' ? calculateAccuracy(line.en, userInput) : undefined;
       
@@ -675,6 +709,8 @@ export default function PracticeArea({
       return;
     }
 
+    if (checkMicTimeout()) return;
+
     setRecordingError(null);
     setIsRecording(line.id);
 
@@ -695,6 +731,9 @@ export default function PracticeArea({
       },
       () => {
         setIsRecording(null);
+      },
+      (interimText) => {
+        setAiUserRecordedTranscript(interimText);
       }
     );
   };
@@ -949,6 +988,7 @@ export default function PracticeArea({
                 lineRate={lineRate}
                 showResults={showResults}
                 isRecognizerSupported={recognizer.isSupported()}
+                interimTranscript={interimTranscripts[line.id]}
                 onPlayTTS={() => handlePlayTTS(line)}
                 onPauseTTS={() => handlePauseTTS(line.id)}
                 onResumeTTS={() => handleResumeTTS(line.id)}

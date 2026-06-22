@@ -118,7 +118,7 @@ export class SpeechRecognizer {
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = false;
-      this.recognition.interimResults = false;
+      this.recognition.interimResults = true; // Enabled for realtime running text
       this.recognition.lang = 'en-US';
     }
   }
@@ -130,7 +130,8 @@ export class SpeechRecognizer {
   public start(
     onResult: (result: RecognitionResult) => void,
     onError: (error: string) => void,
-    onEnd: () => void
+    onEnd: () => void,
+    onInterimResult?: (transcript: string) => void
   ): void {
     if (!this.recognition) {
       onError('Speech Recognition not supported in this browser.');
@@ -146,11 +147,28 @@ export class SpeechRecognizer {
     };
 
     this.recognition.onresult = (event: any) => {
-      const result = event.results[event.results.length - 1];
-      if (result && result[0]) {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      let confidence = 1.0;
+
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        const result = event.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript;
+          confidence = result[0].confidence;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      if (interimTranscript && onInterimResult) {
+        onInterimResult(interimTranscript);
+      }
+
+      if (finalTranscript) {
         onResult({
-          transcript: result[0].transcript,
-          confidence: result[0].confidence,
+          transcript: finalTranscript,
+          confidence: confidence,
         });
       }
     };
