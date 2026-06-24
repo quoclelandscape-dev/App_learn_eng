@@ -107,16 +107,45 @@ function toSettings(row: any): Settings {
 // --- DEVICE UUID HELPER ---
 
 /**
+ * Generates a cryptographically strong UUID using the Web Crypto API,
+ * with a fallback for environments that don't support it.
+ */
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback: RFC 4122 compliant UUID v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+/**
  * Returns a unique browser Device UUID stored in localStorage to separate accounts/data.
+ * - Uses crypto.randomUUID() for proper UUID generation (no collisions, sufficient entropy).
+ * - Guards against SSR (server-side rendering) by checking for window/localStorage.
+ * - Returns a temporary placeholder during SSR — callers must only invoke this client-side
+ *   (e.g., inside useEffect or event handlers).
  */
 export function getDeviceUuid(): string {
-  if (typeof window === 'undefined') return 'server-side';
-  let uuid = localStorage.getItem('shadowdictate_device_uuid');
-  if (!uuid) {
-    uuid = 'dev-' + Math.random().toString(36).substring(2, 9) + Math.random().toString(36).substring(2, 9);
-    localStorage.setItem('shadowdictate_device_uuid', uuid);
+  if (typeof window === 'undefined' || typeof localStorage === 'undefined') {
+    // This should never be used for DB queries. Callers must be client-side only.
+    return '';
   }
-  return uuid;
+  try {
+    let uuid = localStorage.getItem('shadowdictate_device_uuid');
+    if (!uuid || uuid === 'server-side') {
+      // Migrate legacy 'server-side' value or create new UUID
+      uuid = generateUUID();
+      localStorage.setItem('shadowdictate_device_uuid', uuid);
+    }
+    return uuid;
+  } catch {
+    // localStorage might be blocked (e.g., incognito with strict settings)
+    return generateUUID();
+  }
 }
 
 // --- DATABASE FUNCTIONS ---
@@ -126,6 +155,8 @@ export function getDeviceUuid(): string {
  */
 export async function getDialogues(): Promise<Dialogue[]> {
   const uuid = getDeviceUuid();
+  if (!uuid) throw new Error('Device UUID chưa sẵn sàng — chỉ gọi hàm này phía client.');
+
   const { data, error } = await supabase
     .from('dialogues')
     .select('*')
@@ -160,6 +191,8 @@ export async function saveDialogue(dialogue: Dialogue): Promise<void> {
  */
 export async function getUserStats(): Promise<UserStats | null> {
   const uuid = getDeviceUuid();
+  if (!uuid) throw new Error('Device UUID chưa sẵn sàng — chỉ gọi hàm này phía client.');
+
   const { data, error } = await supabase
     .from('user_stats')
     .select('*')
@@ -183,6 +216,7 @@ export async function getUserStats(): Promise<UserStats | null> {
  */
 export async function saveUserStats(stats: UserStats): Promise<void> {
   const uuid = getDeviceUuid();
+  if (!uuid) throw new Error('Device UUID chưa sẵn sàng — chỉ gọi hàm này phía client.');
   const row = {
     id: `stats_${uuid}`,
     streak: stats.streak,
@@ -215,6 +249,8 @@ export async function saveUserStats(stats: UserStats): Promise<void> {
  */
 export async function getSettings(): Promise<Settings | null> {
   const uuid = getDeviceUuid();
+  if (!uuid) throw new Error('Device UUID chưa sẵn sàng — chỉ gọi hàm này phía client.');
+
   const { data, error } = await supabase
     .from('settings')
     .select('*')
@@ -237,6 +273,7 @@ export async function getSettings(): Promise<Settings | null> {
  */
 export async function saveSettings(settings: Settings): Promise<void> {
   const uuid = getDeviceUuid();
+  if (!uuid) throw new Error('Device UUID chưa sẵn sàng — chỉ gọi hàm này phía client.');
   const row = {
     id: `settings_${uuid}`,
     gemini_api_key: settings.geminiApiKey,
