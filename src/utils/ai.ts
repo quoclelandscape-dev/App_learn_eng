@@ -1,15 +1,69 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-async function callWithRetry<T>(fn: () => Promise<T>, retries = 2, delay = 1000): Promise<T> {
+/**
+ * Retry helper with exponential backoff + jitter.
+ * - Lỗi 503 (server quá tải) / 429 (rate limit): retry tối đa 4 lần, delay bắt đầu từ 2s.
+ * - Lỗi khác (không phải API key): retry tối đa 2 lần, delay bắt đầu từ 1s.
+ * - Lỗi API key / auth: không retry, ném lỗi ngay.
+ */
+async function callWithRetry<T>(
+  fn: () => Promise<T>,
+  retries?: number,
+  delay?: number
+): Promise<T> {
+  // Determine retry count and base delay on first call (retries === undefined)
+  const isFirstCall = retries === undefined;
+
+  return _callWithRetry(fn, retries, delay, isFirstCall);
+}
+
+async function _callWithRetry<T>(
+  fn: () => Promise<T>,
+  retries: number | undefined,
+  delay: number | undefined,
+  isFirstCall: boolean
+): Promise<T> {
   try {
     return await fn();
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : String(error);
-    const isApiKeyError = errorMsg.includes('API key') || errorMsg.includes('API_KEY') || errorMsg.includes('INVALID_ARGUMENT');
-    if (retries > 0 && !isApiKeyError) {
-      console.warn(`Gemini API call failed with error: ${errorMsg}. Retrying in ${delay}ms... (${retries} retries left)`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-      return callWithRetry(fn, retries - 1, delay * 2);
+
+    // Never retry auth errors
+    const isApiKeyError =
+      errorMsg.includes('API key') ||
+      errorMsg.includes('API_KEY') ||
+      errorMsg.includes('INVALID_ARGUMENT');
+    if (isApiKeyError) throw error;
+
+    // Detect server-overload / rate-limit errors → more retries, longer delay
+    const isOverloadError =
+      errorMsg.includes('503') ||
+      errorMsg.includes('429') ||
+      errorMsg.includes('high demand') ||
+      errorMsg.includes('overloaded') ||
+      errorMsg.includes('RESOURCE_EXHAUSTED') ||
+      errorMsg.includes('UNAVAILABLE');
+
+    // Set defaults on first call based on error type
+    const maxRetries = retries ?? (isOverloadError ? 4 : 2);
+    const baseDelay  = delay  ?? (isOverloadError ? 2000 : 1000);
+
+    if (maxRetries > 0) {
+      // Add random jitter (±20%) to avoid thundering-herd
+      const jitter = baseDelay * 0.2 * (Math.random() * 2 - 1);
+      const waitMs = Math.round(baseDelay + jitter);
+      console.warn(
+        `Gemini API lỗi: ${errorMsg.substring(0, 120)}. Thử lại sau ${waitMs}ms... (còn ${maxRetries} lần)`
+      );
+      await new Promise(resolve => setTimeout(resolve, waitMs));
+      return _callWithRetry(fn, maxRetries - 1, baseDelay * 2, false);
+    }
+
+    // All retries exhausted — throw a user-friendly message
+    if (isOverloadError) {
+      throw new Error(
+        'Gemini API đang quá tải (503). Vui lòng thử lại sau vài giây hoặc dùng API Key cá nhân của bạn trong Cài đặt.'
+      );
     }
     throw error;
   }
